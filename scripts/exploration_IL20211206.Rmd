@@ -1,0 +1,353 @@
+---
+title: "Proteogenomics exploration"
+output:
+  rmarkdown::github_document:
+    html_preview: false
+---
+
+```{r opts, echo=FALSE}
+knitr::opts_chunk$set(
+  fig.path = "md_files/exploration/"
+)
+
+```
+
+```{r setup}
+library(tidyverse)
+library(Biobase)
+library(ggthemes)
+library(data.table)
+
+theme_set(theme_tufte())
+
+setwd("~/Documents/githubspot/deepmeltome/R")
+
+sourceDir <- function(path, ...) {
+  for (nm in list.files(path, pattern = "\\.[RrSsQq]$")) {
+    source(file.path(path, nm), ...)
+  }
+}
+sourceDir(path = file.path("pepnet"))
+
+
+```
+
+```{r IL_manual_start_PSMs} 
+setwd("~/Documents/githubspot/deepmeltome/R")
+
+#load in from kantele novel peptide search
+psm_all <- read.delim("/Users/lab/Desktop/RJ_ALL_meltome_NovelpeptideSearch_ILcopy_Nov232020/target_psmtable.txt", sep = "\t")
+#peptides <- readRDS(file = "~/Downloads/peptides (2).RDS") #From DeepMeltome_ALL_Nils>deepmeltome>proteoform_detection_phospho_novel_all_strips
+
+#just pep sequence
+psm_all$Peptide_AA <- gsub("[0-9+.]", "", psm_all$Peptide)
+
+#load in cell line Husen analysis (Oct 2020, from proteogenomiccs folder on teams)
+psm_husen <- read.delim("/Users/lab/Documents/githubspot/deepmeltome/data/Meltome_Set1-11_Novelpeptides_ENS99/novel_filteredBlastSpecAI_normalized_final_psmtable (1).tsv", sep = "\t")
+
+psm_husen$Peptide_AA <- gsub("[0-9+.]", "", psm_husen$Peptide)
+
+#in_eset <- psm_husen[gsub("[0-9+.]", "", rownames(peptides@assayData$exprs)) %in% psm_husen$Peptide_AA,]
+novel_psm_all <- psm_all[psm_all$Peptide_AA %in% psm_husen$Peptide_AA,]
+saveRDS(novel_psm_all, file = "~/Documents/githubspot/deepmeltome/novel_psm_all.RDS")
+
+husen_meta_meltomedetected <- psm_husen[psm_husen$Peptide_AA %in% unique(novel_psm_all$Peptide_AA),]
+
+rm(novel_psm_all)
+gc()
+
+#just look at ones mapped to a putative protein similarity
+husen_meta_meltomedetected <- husen_meta_meltomedetected[husen_meta_meltomedetected$blastp_match != "NA",]
+
+psms_eset <-import_psms_from_nf("/Users/lab/Desktop/RJ_ALL_meltome_NovelpeptideSearch_ILcopy_Nov232020/target_psmtable.txt", id_col = "Gene Name", peptide_col = "Peptide", protein_id_col = "Protein", quan_regex = "tmt16plex")
+
+peptides_novel <- psms_to_peptides(psms = psms_eset, summarise_fun = sum,
+                                 sample_meta_file = file.path("meta", "meltome_sample_meta.txt"),
+                                 sample_id_col = "sample_id")
+
+peptides_novel_vsn <- vsn_normalize_by_temperature(e_set = peptides_novel)
+peptides_novel_normalized <- build_ratios_to_lowest_temperature(e_set = peptides_novel_vsn, sample_col = "sample_name")
+peptides_novel_normalized@featureData@data$Peptide_AA <- gsub("[0-9+.]", "", peptides_novel_normalized@featureData@data$peptide)
+peptides_novel_normalized@featureData@data$Novel <- peptides_novel_normalized@featureData@data$Peptide_AA %in% husen_meta_meltomedetected$Peptide_AA
+
+fData(peptides_novel_normalized) <- cbind(fData(peptides_novel_normalized),"old_rownames" = rownames(peptides_novel_normalized))
+rownames(peptides_novel_normalized) <- paste0("peptide", 1:nrow(peptides_novel_normalized))
+
+
+```
+```{r SaveAndReadIn!!!}
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/husen_meta_meltomedetected.RDS",husen_meta_meltomedetected)
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel.RDS",peptides_novel)
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel_normalized.RDS",peptides_novel_normalized)
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel_vsn.RDS",peptides_novel_vsn)
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/psms_eset.RDS",psms_eset)
+saveRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/psm_husen.RDS",psm_husen)
+```
+
+
+```{r SaveAndReadIn!!!}
+husen_meta_meltomedetected <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/husen_meta_meltomedetected.RDS")
+peptides_novel <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel.RDS")
+peptides_novel_normalized <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel_normalized.RDS")
+peptides_novel_vsn <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/peptides_novel_vsn.RDS")
+psms_eset <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/psms_eset.RDS")
+psm_husen <- readRDS(file = "~/Documents/githubspot/clinical_ALL_2020/deepmeltome/data/psm_husen.RDS")
+```
+
+```{r DOK3_Novel}
+#DOK3 aka XP_016865372.1 novel peptide: LLELDQVEGTGRPDPQILLGTPGVSLLICK
+plot_id_symbol_melting(id_symbol = "DOK3", e_set = peptides_novel_normalized, additional_peptides = c("LLELDQVEGTGRPDPQILLGTPGVSLLICK"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+```{r DOK3_Novel_RCHACV}
+#DOK3 aka XP_016865372.1 novel peptide: LLELDQVEGTGRPDPQILLGTPGVSLLICK 
+#RCHACV has a Frame shift deletion validated in depmap: Damaging, T1859fs
+plot_id_symbol_melting(id_symbol = "DOK3", e_set = peptides_novel_normalized, additional_peptides = c("LLELDQVEGTGRPDPQILLGTPGVSLLICK"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE, subset_cell_line = "RCH-ACV")
+
+```
+
+
+```{r DOK3_Just_Novel}
+#DOK3 aka XP_016865372.1 novel peptide: LLELDQVEGTGRPDPQILLGTPGVSLLICK
+plot_id_symbol_melting(id_symbol = "Nothing matches this character string", e_set = peptides_novel_normalized, additional_peptides = c("LLELDQVEGTGRPDPQILLGTPGVSLLICK"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = FALSE)
+
+```
+
+
+```{r DOK3_By_Protein}
+#DOK3 aka XP_016865372.1 novel peptide: LLELDQVEGTGRPDPQILLGTPGVSLLICK
+plot_id_symbol_melting(id_symbol = "DOK3", e_set = peptides_novel_normalized, additional_peptides = c("LLELDQVEGTGRPDPQILLGTPGVSLLICK"), add_splines = TRUE, label_proteins = TRUE)
+
+```
+Look for validated mutations that are detected in the neoantigen proteomics
+
+```{r KOPN8_Mutations}
+#write_csv(as.data.frame(husen_meta_meltomedetected$blastp_match), file = "~/Downloads/husen_blastmatches.csv")
+#convert these using gProfiler to gene symbols
+gene_symbol_key <- read.delim("~/Downloads/gProfiler_hsapiens_17-12-2021_17-10-45.csv", sep = ",")
+#filter to unique identifier pairs only
+gene_symbol_key$identifier <- paste0(gene_symbol_key$initial_alias, ";;;", gene_symbol_key$converted_alias)
+gene_symbol_key <- unique(gene_symbol_key$identifier) %>% str_split(pattern = ";;;") %>% as.data.frame()
+gene_symbol_key <- as.data.frame(t(gene_symbol_key))
+colnames(gene_symbol_key) <- c("blastp_match", "Gene")
+#read in known mutations from depmap
+KOPN8_muts_depmap <- read.delim("~/Downloads/KOPN8 mutations.csv", sep = ",")
+
+gene_symbol_mutations <- left_join(x = KOPN8_muts_depmap, y = gene_symbol_key, by = "Gene")
+husen_meta_kopn8_mutated <- husen_meta_meltomedetected[husen_meta_meltomedetected$blastp_match %in% gene_symbol_mutations$blastp_match,] 
+husen_meta_kopn8_mutated <- husen_meta_kopn8_mutated[!is.na(husen_meta_kopn8_mutated$blastp_match),] %>%
+  left_join(y = gene_symbol_mutations, by = "blastp_match")
+
+```
+
+Not exactly the same, but quite close to the damaging nonsense deletion, S* insertion
+```{r KOPN8_Mutations_Plots_PRKDC}
+library(ggpubr)
+plot1 <- plot_id_symbol_melting(id_symbol = "PRKDC", e_set = peptides_novel_normalized, additional_peptides = c("EQMYNILMWIHDNYSRDPESETDNDSQEIFK"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE, subset_cell_line = "KOPN-8")
+plot1 + theme_pubr()
+
+#too many peptides to view
+# plot_id_symbol_melting(id_symbol = "PRKDC", e_set = peptides_novel_normalized, additional_peptides = c("EQMYNILMWIHDNYSRDPESETDNDSQEIFK"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE)
+```
+
+#Not useful novel peptide plots graveyard below
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+
+
+#six supb15 mutations match an identifier in Husen's data
+#unfortunately none of them are the right mutation
+
+```{r SUPB15_Mutations}
+write_csv(as.data.frame(husen_meta_meltomedetected$blastp_match), file = "~/Downloads/husen_blastmatches.csv")
+#convert these using gProfiler to gene symbols
+gene_symbol_key <- read.delim("~/Downloads/gProfiler_hsapiens_17-12-2021_17-10-45.csv", sep = ",")
+#filter to unique identifier pairs only
+gene_symbol_key$identifier <- paste0(gene_symbol_key$initial_alias, ";;;", gene_symbol_key$converted_alias)
+gene_symbol_key <- unique(gene_symbol_key$identifier) %>% str_split(pattern = ";;;") %>% as.data.frame()
+gene_symbol_key <- as.data.frame(t(gene_symbol_key))
+colnames(gene_symbol_key) <- c("blastp_match", "Gene")
+#read in known mutations from depmap
+SUPB15_muts_depmap <- read.delim("~/Downloads/SUPB15 mutations.csv", sep = ",")
+
+gene_symbol_mutations <- left_join(x = SUPB15_muts_depmap, y = gene_symbol_key, by = "Gene")
+husen_meta_supb15_mutated <- husen_meta_meltomedetected[husen_meta_meltomedetected$blastp_match %in% gene_symbol_mutations$blastp_match,] 
+husen_meta_supb15_mutated <- husen_meta_supb15_mutated[!is.na(husen_meta_supb15_mutated$blastp_match),] %>%
+  left_join(y = gene_symbol_mutations, by = "blastp_match")
+
+```
+
+No matching supb15 mutations :(
+Explore the plots for mutated proteins by gene symbol
+This mutation by melt difference could be promising but it doesn't match depmap info for supb15's known mutation, it is two different substitutions
+```{r SUPB15_Mutations_Plots_GRID2IP}
+plot_id_symbol_melting(id_symbol = "GRID2IP", e_set = peptides_novel_normalized, additional_peptides = c("AYEEVELCSEK"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE, subset_cell_line = "SUP-B15")
+
+plot_id_symbol_melting(id_symbol = "GRID2IP", e_set = peptides_novel_normalized, additional_peptides = c("AYEEVELCSEK"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE)
+```
+
+```{r SUPB15_Mutations_Plots_PRKCI}
+plot_id_symbol_melting(id_symbol = "PRKCI", e_set = peptides_novel_normalized, additional_peptides = c("VAQVHSSQCDPEAPGGPCR"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+```
+
+Same melting temp and not the right mutation
+
+```{r SUPB15_Mutations_Plots_EIF4H}
+plot_id_symbol_melting(id_symbol = "EIF4H", e_set = peptides_novel_normalized, additional_peptides = c("GFCYIEFDEVDSLK"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE)
+```
+
+
+```{r MICAL1_Novel}
+plot_id_symbol_melting(id_symbol = "MICAL1", e_set = peptides_novel_normalized, additional_peptides = c("HALESSFVGWGLPVQSPQDLQGLR"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+
+```{r THOP1_Novel}
+plot_id_symbol_melting(id_symbol = "THOP1", e_set = peptides_novel_normalized, additional_peptides = c("EGAAGADPPAMKPPAACAGDMADAASPCSVVNDLR"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+```{r PRDX6_Novel}
+#EEF1A1 aka NP_001393.1 novel peptide: IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK
+plot(plot_id_symbol_melting(id_symbol = "SQSTM1", e_set = peptides_novel_normalized[,peptides_novel_normalized@phenoData@data$sample_name == "KASUMI-9"], additional_peptides = c("IALESEGRPEASLCPSR"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE, facet_col = "sample_name"
+                            ) + theme_pubr())
+
+```
+```{r PRDX6_Novel}
+#EEF1A1 aka NP_001393.1 novel peptide: IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK
+plot(plot_id_symbol_melting(id_symbol = "SQSTM1", e_set = peptides_novel_normalized[,peptides_novel_normalized@phenoData@data$sample_name == "KASUMI-9"], additional_peptides = c("IALESEGRPEASLCPSR"), add_splines = TRUE, label_proteins = TRUE, highlight_additional = TRUE, facet_col = "sample_name"
+                            ) + theme_pubr())
+
+
+View(exprs(peptides_novel_normalized[,peptides_novel_normalized@phenoData@data$sample_name == "KASUMI-9"]))
+View(fData(peptides_novel_normalized[,peptides_novel_normalized@phenoData@data$sample_name == "KASUMI-9"]))
+```
+	
+```{r PRDX6_Novel}
+#EEF1A1 aka NP_001393.1 novel peptide: IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK
+plot_id_symbol_melting(id_symbol = "PRDX6", e_set = peptides_novel_normalized, additional_peptides = c("LPFPILDNR"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+	
+
+```{r FKBP1A_Novel}
+#EEF1A1 aka NP_001393.1 novel peptide: IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK
+plot_id_symbol_melting(id_symbol = "FKBP1A", e_set = peptides_novel_normalized, additional_peptides = c("SASAAAMGVQVETISPGDGR"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+
+```{r EEF1A1_Novel}
+#EEF1A1 aka NP_001393.1 novel peptide: IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK
+plot_id_symbol_melting(id_symbol = "EEF1A1", e_set = peptides_novel_normalized, additional_peptides = c("IGYNPDTVAFVPFAGWNCDNMLEPSANMPWFK"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+```{r LAT2_Novel}
+#LAT2 aka XP_011514860.1 novel peptide: LGLGSDDDANSYENVLICK
+plot_id_symbol_melting(id_symbol = "LAT2", e_set = peptides_novel_normalized, additional_peptides = c("LGLGSDDDANSYENVLICK"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE)
+
+```
+
+
+
+
+```{r VWA2_Novel}
+#EEF1A1 aka  novel peptide: 
+library(ggpubr)
+plot_id_symbol_melting(id_symbol = "VWA2", e_set = peptides_novel_normalized, additional_peptides = c("LPDGQHCHCQCIRPGQESCGRPGADGGPR"), add_splines = TRUE, label_proteins = TRUE,facet_col = "sample_name", highlight_additional = TRUE) + theme_pubr()
+
+```
+
+```{r RPL22_Novel}
+#EEF1A1 aka  novel peptide: 
+plot_id_symbol_melting(id_symbol = "RPL22", e_set = peptides_novel_normalized, additional_peptides = c("FTLECTHPVEDGIMDAANFEQFLQER"), add_splines = FALSE, label_proteins = TRUE, highlight_additional = TRUE#, 
+                       #facet_col = "sample_name",
+                       )
+
+```
+
+
+
+# ```{r peptides_manual_start}
+# peptides_raw <- read.delim("/Users/lab/Desktop/RJ_ALL_meltome_NovelpeptideSearch_ILcopy_Nov232020/peptides_table.txt")
+# ```
+
+#Legacy - from m Stahl
+```{r load_data}
+# fasta headers to get gene symbols
+headers <- read_delim(file = file.path("..", "data", "proteogenomics", "novel_fasta_headers.txt"),
+                      delim = " ") %>%
+  set_names(c("id", "content", "classes")) %>%
+  # .[1:10, ] %>%
+  mutate(id = gsub(">", "", id)) %>%
+  mutate(transcripts = lapply(content, function (c) {
+    str_split(c, ",") %>%
+      lapply(function (x) {
+        str_split(x, ";") %>%
+          lapply(function (y) {
+            entry <- try(y[[2]], silent = TRUE)
+            if (class(entry) == "try-error") return("unknown")
+            return(entry)
+          }) %>%
+          unique() %>%
+          paste(collapse = ";")
+      }) %>%
+      paste(collapse = ";")
+  }) %>%
+    unlist()) %>%
+  mutate(gene_symbols = lapply(content, function (c) {
+    str_split(c, ",") %>%
+      lapply(function (x) {
+        str_split(x, ";") %>%
+          lapply(function (y) {
+            entry <- try(y[[2]], silent = TRUE)
+            if (class(entry) == "try-error") return("unknown")
+            return(gsub("-[0-9]+$", "", entry))
+          }) %>%
+          unique() %>%
+          paste(collapse = ";")
+      }) %>%
+      paste(collapse = ";")
+  }) %>%
+    unlist()) %>%
+  filter(gene_symbols != "unknown")
+
+headers_list <- headers$gene_symbols %>% set_names(headers$id)
+
+# read the data
+# this is the original (non-proteogenomics) data
+data <- read_tsv(file = file.path("..", "data", "target_psmtable.txt"))
+
+novel_data <- read_tsv(file = file.path("..", "data", "proteogenomics", "novel_target_psmtable.txt")) %>%
+  # .[1:10, ] %>%
+  mutate(Protein = gsub("\\(pre=[A-Z\\-],post=[A-Z\\-]\\)", "", Protein)) %>%
+  mutate(`Ion mobility(Vs/cm2)` = NA,
+         `Master protein(s)` = NA,
+         `Protein group(s) content` = NA,
+         `Amount of matching proteins in group(s)` = NA,
+         `Gene ID` = NA,
+         `Description` = NA,
+         `FWHM` = NA) %>%
+  mutate(`Gene Name` = lapply(Protein, function (ps) {
+    str_split(ps, ";")[[1]] %>%
+      lapply(function (p) {
+        gene_symbol <- try(headers_list[[p]], silent = TRUE)
+        if (class(gene_symbol) == "try-error") {
+          return("unknown")
+        }
+        return(gene_symbol)
+      }) %>%
+      unique() %>%
+      paste(collapse = ";") %>%
+      as.character()
+  }) %>%
+    unlist()) %>%
+  .[, colnames(data)]
+
+# merge and save
+suppl_data <- data %>%
+  rbind(novel_data) %>%
+  write_tsv(file = file.path("..", "data", "proteogenomics", "novel_and_canonical_target_psmtable.txt"))
+
+```
+
