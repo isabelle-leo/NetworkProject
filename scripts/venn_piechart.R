@@ -6,7 +6,7 @@ library(ggvenn)
 
 ### Load data
 # Load ALL data
-ALL_output <- readRDS("/Users/labrat/Library/CloudStorage/OneDrive-共享的库-Onedrive/Sweden/MTLS/summer intern/💻Research project/PSM-proteoform pipeline/outputs/all_from_CLL_default_normcenter.RDS")
+ALL_output <- readRDS("/Users/labrat/Downloads/ALL_new.RDS")
 
 # Load graph object
 graphs_comm <- readRDS("/Users/labrat/Library/CloudStorage/OneDrive-共享的库-Onedrive/Sweden/MTLS/summer intern/💻Research project/PSM-proteoform pipeline/inputs/graphs_comms 1.RDS")
@@ -69,8 +69,8 @@ overlapping_peptides <- intersect(peptides_graph, peptides_psm)
 cat( 
   "Dimensions of hits_everything_graph: ", dim(hits_everything_graph), "\n",
   "Dimensions of psm_table: ", dim(psm_table), "\n",
-  "Peptides number in hits_everything_graph: ", length(unique(hits_everything_graph$NormalizedPeptide)), "\n",
-  "Peptides number in psm_table: ", length(unique(psm_table$NormalizedPeptide)), "\n",
+  "Unique Peptides number in hits_everything_graph: ", length(unique(hits_everything_graph$NormalizedPeptide)), "\n",
+  "Unique Peptides number in psm_table: ", length(unique(psm_table$NormalizedPeptide)), "\n",
   "Number of overlapping peptides: ", length(intersect(unique(hits_everything_graph$NormalizedPeptide), unique(psm_table$NormalizedPeptide))), "\n"
 )
 print(head(overlapping_peptides))
@@ -101,6 +101,45 @@ pie_labels <- paste0(labels, "\n", counts, " (", percentage, "%)")
 
 # Plot pie chart
 pie(counts, labels = pie_labels, main = "Peptides found in PSM Table and Graphs", col = c("#FF9999", "#99CCFF", "#CCCCFF"))
+#check if data is correct
+# Find the number of unique values in the name column
+ length(unique(hits_everything$name))
+ length(unique(psm_table$Peptide))
+
+##note: the graph only contains the unique, normalised peptide seq.which means all duplicated peptide seq after normalizing is removed.
+
+
+###looking into proteoforms
+
+# Create a new id column using gene_symbol and membership
+hits_everything_graph <- hits_everything_graph %>%
+  mutate(id = paste(gene_symbol, membership, sep = "_"))
+
+# Display the head of the modified dataframe
+head(hits_everything_graph)
+
+
+# Calculate counts for unique and overlapping proteoforms
+counts <- c(
+  length(setdiff(ALL_data$id, hits_everything_graph$id)), 
+  length(setdiff(hits_everything_graph$id, ALL_data$id)), 
+  length(intersect(ALL_data$id, hits_everything_graph$id))
+)
+labels <- c("ALL Data Only", "Hits Only", "Overlap")
+
+# Create labels with counts and percentages
+total_proteoforms <- sum(counts)
+percentage <- round(counts / total_proteoforms * 100, 1)
+pie_labels <- paste0(labels, "\n", counts, " (", percentage, "%)")
+
+# Print data to check if it is correct
+print(data.frame(Category = labels, Count = counts, Percentage = percentage))
+
+# Plot pie chart
+pie(counts, labels = pie_labels, main = "Proteoforms found in ALL Data and Graphs_comm", col = c("#FF9999", "#99CCFF", "#CCCCFF"))
+#check data
+length(unique(ALL_output$id))#number of different proteomes found in two datasets
+length(unique(hits_everything_graph$id))
 
 
 
