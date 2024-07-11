@@ -1,6 +1,6 @@
 ## Inputs
 ### RSS data 
-- rss_data_full.txt (contains RSS value per peptide)
+- rss_data_full.txt (contains RSS value/type per peptide)
 
 ### Annotation files (info_data)
 - CellAtlasAnnotationsVsSubCellBarCode.txt (Sub-cellular location)
